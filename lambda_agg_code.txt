@@ -1,0 +1,42 @@
+import json
+import boto3
+import pandas as pd
+import os
+from io import StringIO
+
+def lambda_handler(event, context):
+    
+    # Initialize the S3 client
+    s3_client=boto3.client('s3')
+    
+    # Get the bucket name and file key from the Lambda event
+    source_bucket = event['Records'][0]['s3']['bucket']['name']
+    source_key = event['Records'][0]['s3']['object']['key']
+   
+   # Define the destination bucket and the key for the modified file
+    destination_bucket = 'transformationlambdas3bucketdestination'
+    destination_key = 'modified-' + source_key
+    
+    # Fetch the file from S3
+    response = s3_client.get_object(Bucket=source_bucket, Key=source_key)
+    content = response['Body'].read().decode('utf-8')
+    
+    # Read the CSV data into a Pandas DataFrame
+    df = pd.read_csv(StringIO(content))
+    
+     # Perform the calculation (adding two columns)
+    # Replace 'column1' and 'column2' with your actual column names
+    df_aggregated= df.groupby(["month_year","product"]).entity_id.nunique().reset_index()
+    
+    # Convert DataFrame back to CSV
+    csv_buffer = StringIO()
+    df_aggregated.to_csv(csv_buffer, index=False)
+    
+    # Upload the modified file to the destination bucket
+    s3_client.put_object(Bucket=destination_bucket, Key=destination_key, Body=csv_buffer.getvalue())
+    
+    
+    return {
+        'statusCode': 200,
+        'body': 'CSV file processed and uploaded successfully'
+    }
